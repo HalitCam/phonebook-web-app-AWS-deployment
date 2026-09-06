@@ -88,7 +88,7 @@ thousand                         Warning -> 'Invalid input: Phone number should 
 
     - set health check type to `ELB`
 
-  - The Launch Template should be configured to;
+  <!-- - The Launch Template should be configured to;
 
     - prepare Python Flask environment on EC2 instance,
 
@@ -98,7 +98,7 @@ thousand                         Warning -> 'Invalid input: Phone number should 
 
   - EC2 Instances type can be configured as `t3.micro`.
 
-  - Instance launched by Cloudformation should be tagged `Web Server of StackName`
+  - Instance launched by Cloudformation should be tagged `Web Server of StackName` -->
 
   - For RDS Database Instance;
   
