@@ -1,17 +1,32 @@
 # Import Flask modules
 from flask import Flask, request, render_template
 from flaskext.mysql import MySQL
+import boto3
 
-# Create an object named app
+def get_ssm_parameters():
+    ssm = boto3.client('ssm', region_name='us-east-1')
+
+    username_param = ssm.get_parameter(Name='/ondia/phonebook/username')
+    password_param = ssm.get_parameter(Name="/ondia/phonebook/password", WithDecryption=True)
+
+
+    username = username_param['Parameter']['Value']
+    password = password_param['Parameter']['Value']
+
+    return username, password
+
 app = Flask(__name__)
+
+db_username, db_password = get_ssm_parameters()
 
 # This "/home/ec2-user/dbserver.endpoint" file has to be created from cloudformation template and it has RDS endpoint
 db_endpoint = open("/home/ec2-user/dbserver.endpoint", 'r', encoding='UTF-8') 
 
 # Configure mysql database
+
 app.config['MYSQL_DATABASE_HOST'] = db_endpoint.readline().strip()
-app.config['MYSQL_DATABASE_USER'] = 'admin'
-app.config['MYSQL_DATABASE_PASSWORD'] = 'ondia_123456789*'
+app.config['MYSQL_DATABASE_USER'] = db_username
+app.config['MYSQL_DATABASE_PASSWORD'] = db_password
 app.config['MYSQL_DATABASE_DB'] = 'ondia_phonebook'
 app.config['MYSQL_DATABASE_PORT'] = 3306
 db_endpoint.close()

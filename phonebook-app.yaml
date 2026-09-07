@@ -5,26 +5,29 @@ Description:
 
 Parameters:
   myKey: 
-    Type: String
+    Description: Please enter your Key pair
+    Type: AWS::EC2::KeyPair::KeyName
     Default: halit-key1
   myTokenGit:
-    # Type: AWS::SSM::Parameter::Value<String>
+    Type: AWS::SSM::Parameter::Value<String>
     Type: String 
     Default: /myTokenGit
   myDatabaseName:
-    Type : String 
+    Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/database_name
   myDatabaseUserName:
-    Type : String 
+    Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/username
   myDatabasePassword:
-    Type : String 
+    Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/password
   myVpcId:
+    Description: Please choose your VPC
     Type: AWS::EC2::VPC::Id
   mySubnets:
+    Description: Description: Please select your subnets used by ALB
     Type: 'List<AWS::EC2::Subnet::Id>'
-    Description: A list of subnets for the Auto Scaling group
+    
 
 Resources:
   AppLoadBalancerSecGroup:
@@ -209,6 +212,7 @@ Resources:
             sudo pip install Flask -y
             sudo pip install flask-mysql -y
             sudo dnf install git -y
+            pip install boto3 -y
             echo ${mySQLDatabaseInstance.Endpoint.Address} > dbserver.endpoint
             git clone https://${myTokenGit}@github.com/HalitCam/SQL-with-FlaskWebApp-deployment.git
             cd SQL-with-FlaskWebApp-deployment
