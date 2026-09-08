@@ -10,8 +10,7 @@ Parameters:
     Default: halit-key1
   myTokenGit:
     Type: AWS::SSM::Parameter::Value<String>
-    Type: String 
-    Default: /myTokenGit
+    Default: /ondia/phonebook/token
   myDatabaseName:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/database_name
@@ -22,11 +21,12 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/password
   myVpcId:
-    Description: Please choose your VPC
     Type: AWS::EC2::VPC::Id
+    Description: Please choose your VPC
   mySubnets:
-    Description: Description: Please select your subnets used by ALB
-    Type: 'List<AWS::EC2::Subnet::Id>'
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Please select your subnets used by ALB
+    
     
 
 Resources:
@@ -46,7 +46,7 @@ Resources:
   ec2InstanceSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow access at port 80 from ALB   # Required
+      GroupDescription: Allow access at port 80 from ALB and ssh access for anywhere   # Required
       GroupName: ec2-SecGroup
       SecurityGroupIngress: 
         - Description: Allow access from ONLY ALB
@@ -64,14 +64,13 @@ Resources:
   mySQLDatabeseSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow access from only ec2-instance # Required
+      GroupDescription: Allow access only from  ec2-instance # Required
       GroupName: phonebookDB_SecGroup
       SecurityGroupIngress: 
         - Description: Allow access from ec2-instances to only database
           FromPort: 3306
           IpProtocol: tcp
           SourceSecurityGroupId: !GetAtt ec2InstanceSecGroup.GroupId
-          # SourceSecurityGroupName: "String"
           ToPort: 3306
       Tags: 
         - Key: Name
@@ -83,34 +82,26 @@ Resources:
     Properties:
       AllocatedStorage: 20
       AllowMajorVersionUpgrade: false
-      ApplyImmediately: false
-      # AssociatedRoles: 
-      #   - FeatureName: "String"
-      #     RoleArn: "String"
       AutoMinorVersionUpgrade: true
-      # AvailabilityZone: "String"
-      # CustomIAMInstanceProfile: "String"
+      BackupRetentionPeriod: 0
       DBInstanceClass: db.t4g.micro
       DBInstanceIdentifier: mySQLPhonebookInstance
-      DBName: !Ref myDatabaseName
-      # DBSecurityGroups: 
-      #   - !Ref mySQLDatabeseSecGroup   !! NEDEN ??
-      # DeletionProtection: false
-      Engine: mysql
+      DBName: !Ref myDatabaseName # ondia_phonebook
+      DeletionProtection: false
+      Engine: MySQL
       EngineVersion: 8.0.42
-      MasterUserAuthenticationType: password
-      MasterUserPassword: !Ref myDatabasePassword
-      MasterUsername: !Ref myDatabaseUserName
+      MasterUserPassword: '{{resolve:ssm-secure:/ondia/password/username:1}}' 
+      MasterUsername: !Ref myDatabaseUserName  
       MaxAllocatedStorage: 40
       Port: 3306
-      # PubliclyAccessible: false
+      PubliclyAccessible: true # in production normally false 
       StorageType: gp2
       Tags: 
         - Key: Name
           Value: halit-Phonebook-db
       VPCSecurityGroups:
         - !GetAtt mySQLDatabeseSecGroup.GroupId
-      #   - "String"
+    DeletionPolicy: Delete
   
   myALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -143,49 +134,24 @@ Resources:
   myTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 20
-      HealthCheckPath: /
-      HealthCheckPort: 80
-      HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 3
-      IpAddressType: ipv4
+      HealthyThresholdCount: 2
       Name: phonebookTargetGroup
       Port: 80
       Protocol: HTTP
-      # Tags: 
-      #   - Key: "String"
-      #     Value: "String"
-      # TargetControlPort: 80 -GREKSIZMIS NEDEN ?
       TargetType: instance 
-      # Targets: 
-      #   - AvailabilityZone: "String"
-      #     Id: "String"
-      #     Port: "Number"
-      #     QuicServerId: "String"
-      UnhealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
       VpcId: !Ref myVpcId
 
   myAutoScaling:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: phonebookAutoScaling
-      AvailabilityZoneDistribution:
-        CapacityDistributionStrategy: balanced-best-effort 
-      # AvailabilityZoneIds: 
-      #   - "String"
-      # Cooldown: 100
-      # DefaultInstanceWarmup: "Number"
       DesiredCapacity: 2
-      # DesiredCapacityType: "String"
       HealthCheckGracePeriod: 90
       HealthCheckType: ELB
       LaunchTemplate:
         LaunchTemplateId: !Ref myLaunchTemplate 
-        Version: !GetAtt myLaunchTemplate.DefaultVersionNumber
-      # LoadBalancerNames: 
-      #   - "String"
+        Version: !GetAtt myLaunchTemplate.LatestVersionNumber
       TargetGroupARNs:
         - !GetAtt myTargetGroup.TargetGroupArn
       MaxSize: 3 # Required
@@ -195,7 +161,7 @@ Resources:
   myLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
         ImageId: ami-081b0a6eac00b4f53
         InstanceType: t3.small
@@ -213,9 +179,9 @@ Resources:
             sudo pip install flask-mysql -y
             sudo dnf install git -y
             pip install boto3 -y
-            echo ${mySQLDatabaseInstance.Endpoint.Address} > dbserver.endpoint
             git clone https://${myTokenGit}@github.com/HalitCam/SQL-with-FlaskWebApp-deployment.git
             cd SQL-with-FlaskWebApp-deployment
+            echo ${mySQLDatabaseInstance.Endpoint.Address} > /home/ec2-user/dbserver.endpoint
             python3 phonebook-app.py
 
       TagSpecifications: 
@@ -228,7 +194,7 @@ Resources:
   myEC2instanceRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: InstanceRole
+        RoleName: SSNRoleWithManagedPolicy
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -239,15 +205,14 @@ Resources:
             Action:
             - 'sts:AssumeRole'
         ManagedPolicyArns:
-          - 'arn:aws:iam::aws:policy/AmazonRDSDataFullAccess'
+          - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+          
   myInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Path: '/'
+      InstanceProfileName: SSMinstanceProfile
       Roles:
       - !Ref myEC2instanceRole
-
-  
 
 Outputs:
   myURL:
@@ -257,7 +222,7 @@ Outputs:
         - !GetAtt 
           - myALB
           - DNSName
-    Description: Installation URL of the Flask Web Application
+    Description: Installation Load Balancer URL of the Phonebook Application
       
   
   
