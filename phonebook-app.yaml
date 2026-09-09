@@ -8,25 +8,20 @@ Parameters:
     Description: Please enter your Key pair
     Type: AWS::EC2::KeyPair::KeyName
     Default: halit-key1
-  myTokenGit:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /ondia/phonebook/token
-  myDatabaseName:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /ondia/phonebook/database_name
+
   myDatabaseUserName:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /ondia/phonebook/username
-  myDatabasePassword:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /ondia/phonebook/password
+
   myVpcId:
     Type: AWS::EC2::VPC::Id
     Description: Please choose your VPC
   mySubnets:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Please select your subnets used by ALB
-    
+  LatestAmiId: 
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
     
 
 Resources:
@@ -72,9 +67,6 @@ Resources:
           IpProtocol: tcp
           SourceSecurityGroupId: !GetAtt ec2InstanceSecGroup.GroupId
           ToPort: 3306
-      Tags: 
-        - Key: Name
-          Value: !Ref myDatabaseName  
       VpcId: !Ref myVpcId      
   
   mySQLDatabaseInstance:
@@ -86,12 +78,12 @@ Resources:
       BackupRetentionPeriod: 0
       DBInstanceClass: db.t4g.micro
       DBInstanceIdentifier: mySQLPhonebookInstance
-      DBName: !Ref myDatabaseName # ondia_phonebook
+      DBName: ondia_phonebook
       DeletionProtection: false
       Engine: MySQL
       EngineVersion: 8.0.42
-      MasterUserPassword: '{{resolve:ssm-secure:/ondia/password/username:1}}' 
-      MasterUsername: !Ref myDatabaseUserName  
+      MasterUserPassword: '{{resolve:ssm-secure:/ondia/phonebook/password:1}}' 
+      MasterUsername: !Ref myDatabaseUserName
       MaxAllocatedStorage: 40
       Port: 3306
       PubliclyAccessible: true # in production normally false 
@@ -163,7 +155,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
-        ImageId: ami-081b0a6eac00b4f53
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.small
         IamInstanceProfile: 
           Name: !Ref myInstanceProfile
@@ -171,25 +163,26 @@ Resources:
         SecurityGroupIds:
           - !GetAtt ec2InstanceSecGroup.GroupId
         UserData: !Base64 
-          Fn::Sub: |
-            #!/bin/bash
-            sudo dnf update -y
-            sudo dnf install python3 python3-pip -y
-            sudo pip install Flask -y
-            sudo pip install flask-mysql -y
-            sudo dnf install git -y
-            pip install boto3 -y
-            git clone https://${myTokenGit}@github.com/HalitCam/SQL-with-FlaskWebApp-deployment.git
-            cd SQL-with-FlaskWebApp-deployment
-            echo ${mySQLDatabaseInstance.Endpoint.Address} > /home/ec2-user/dbserver.endpoint
-            python3 phonebook-app.py
-
-      TagSpecifications: 
-        - ResourceType: launch-template
+          Fn::Sub: 
+            - |
+              #!/bin/bash 
+              dnf update -y
+              dnf install python3 python3-pip -y
+              pip3 install Flask==2.3.3 
+              pip3 install flask-mysql 
+              pip3 install boto3 
+              dnf install git -y
+              echo "${MyDBURL}"  > /home/ec2-user/dbserver.endpoint
+              cd /home/ec2-user
+              git clone https://{{resolve:ssm-secure:/ondia/phonebook/token:1}}@github.com/HalitCam/SQL-with-FlaskWebApp-deployment.git
+              cd SQL-with-FlaskWebApp-deployment
+              python3 phonebook-app.py
+            - MyDBURL: !GetAtt mySQLDatabaseInstance.Endpoint.Address
+        TagSpecifications: 
+        - ResourceType: instance
           Tags:
             - Key: Name
-              Value: Web Server of StackName
-      VersionDescription: 1.0.0
+              Value: !Sub 'Web Server of ${AWS::StackName} Stack'
 
   myEC2instanceRole:
       Type: AWS::IAM::Role
